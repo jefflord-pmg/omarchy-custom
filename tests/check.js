@@ -207,6 +207,12 @@ assert.match(read("patches/shell/Ui/KeyboardPanel.qml"),
 assert.match(read("patches/shell/Ui/KeyboardPanel.qml"),
   /if \(!root\.open && opacity <= 0\) root\.centeredPlacementHeld = false/,
   "centered placement latch is not cleared after the card fades out")
+assert.match(read("patches/shell/Ui/KeyboardPanel.qml"),
+  /Component\.onDestruction:\s*setSurfaceCounted\(false\)/,
+  "destroying an open centered panel leaves its share of the scrim counted")
+assert.match(read("patches/shell/plugins/clipboard/Clipboard.qml"),
+  /Component\.onDestruction:\s*\{[\s\S]*?surfaceCounted && bar[\s\S]*?panelSurfaceVisible\(false\)/,
+  "destroying a visible clipboard panel leaves its share of the scrim counted")
 assert.match(read("patches/shell/plugins/bar/Bar.qml"),
   /api\.centeredPopoutActive = root\.centeredPopoutActive/,
   "bar facades do not receive centered session state")

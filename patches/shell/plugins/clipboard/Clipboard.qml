@@ -323,9 +323,23 @@ Item {
     exclusionMode: ExclusionMode.Ignore
 
     // Share the bar scrim across panel handoffs.
-    onVisibleChanged: {
+    property bool surfaceCounted: false
+
+    function syncSurfaceCount() {
       var bar = root.shell && root.shell.bar
-      if (bar && typeof bar.panelSurfaceVisible === "function") bar.panelSurfaceVisible(visible)
+      var counted = visible && !!bar && typeof bar.panelSurfaceVisible === "function"
+      if (counted === surfaceCounted) return
+      surfaceCounted = counted
+      if (bar && typeof bar.panelSurfaceVisible === "function") bar.panelSurfaceVisible(counted)
+    }
+    onVisibleChanged: syncSurfaceCount()
+
+    // The clipboard widget can be removed while its panel is still visible.
+    // Its normal visibility edge then never balances the shared-scrim count.
+    Component.onDestruction: {
+      var bar = root.shell && root.shell.bar
+      if (surfaceCounted && bar && typeof bar.panelSurfaceVisible === "function")
+        bar.panelSurfaceVisible(false)
     }
 
     MouseArea {

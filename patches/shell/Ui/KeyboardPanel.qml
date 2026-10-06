@@ -87,13 +87,21 @@ PanelWindow {
   // Count mapped panel surfaces for the shared bar scrim.
   property bool surfaceCounted: false
 
+  function setSurfaceCounted(counted) {
+    if (counted === surfaceCounted) return
+    surfaceCounted = counted
+    if (bar && typeof bar.panelSurfaceVisible === "function") bar.panelSurfaceVisible(counted)
+  }
+
   function syncSurfaceCount() {
     // Direct bar popups do not use Wheely's shared backdrop.
     var onScreen = backingWindowVisible && open && centeredByWheel
-    if (onScreen === surfaceCounted) return
-    surfaceCounted = onScreen
-    if (bar && typeof bar.panelSurfaceVisible === "function") bar.panelSurfaceVisible(onScreen)
+    setSurfaceCounted(onScreen)
   }
+
+  // A bar widget/layout can be removed while its panel is open. In that case
+  // the close edge never arrives, so release its share of the scrim explicitly.
+  Component.onDestruction: setSurfaceCounted(false)
 
   onCenteredByWheelChanged: syncSurfaceCount()
 
