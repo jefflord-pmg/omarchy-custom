@@ -50,16 +50,16 @@ QtObject {
       ? _barEntryShellLookup(String(ownerId || ""), String(moduleName || "")) : null
   }
 
-  function summon(id, payloadJson) {
-    return _summon ? _summon(String(id || ""), String(payloadJson || "")) : false
+  function summon(id, payloadJson, centered) {
+    return _summon ? _summon(String(id || ""), String(payloadJson || ""), centered === true) : false
   }
 
   function hide(id) {
     return _hide ? _hide(String(id || "")) : false
   }
 
-  function toggle(id, payloadJson) {
-    return _toggle ? _toggle(String(id || ""), String(payloadJson || "")) : false
+  function toggle(id, payloadJson, centered) {
+    return _toggle ? _toggle(String(id || ""), String(payloadJson || ""), centered === true) : false
   }
 
   function isPluginOpen(id) {

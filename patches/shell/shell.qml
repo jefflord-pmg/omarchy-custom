@@ -659,12 +659,12 @@ ShellRoot {
         return hasCurrentBarCapabilities()
           ? shell.pluginShellForBarEntry(cacheKey + ":" + ownerId, moduleName) : null
       },
-      _summon: function(requestedId, payloadJson) {
+      _summon: function(requestedId, payloadJson, centered) {
         if (!shell.pluginOwnsTarget(key, requestedId)
             && !shell.barPluginMayControl(currentManifest(), requestedId)
             && !shell.menuPluginMayControl(currentManifest(), requestedId)
             && !shell.pluginCloneMaySummon(currentManifest(), requestedId)) return false
-        return shell.summon(shell.pluginRegistry.resolveEnabledId(requestedId), payloadJson)
+        return shell.summon(shell.pluginRegistry.resolveEnabledId(requestedId), payloadJson, centered)
       },
       _hide: function(requestedId) {
         if (!shell.pluginOwnsTarget(key, requestedId)
@@ -672,11 +672,11 @@ ShellRoot {
             && !shell.menuPluginMayControl(currentManifest(), requestedId)) return false
         return shell.hide(shell.pluginRegistry.resolveEnabledId(requestedId))
       },
-      _toggle: function(requestedId, payloadJson) {
+      _toggle: function(requestedId, payloadJson, centered) {
         if (!shell.pluginOwnsTarget(key, requestedId)
             && !shell.barPluginMayControl(currentManifest(), requestedId)
             && !shell.menuPluginMayControl(currentManifest(), requestedId)) return false
-        return shell.toggle(shell.pluginRegistry.resolveEnabledId(requestedId), payloadJson)
+        return shell.toggle(shell.pluginRegistry.resolveEnabledId(requestedId), payloadJson, centered)
       },
       _isOpen: function(requestedId) {
         if (!shell.pluginOwnsTarget(key, requestedId)
@@ -1262,7 +1262,7 @@ ShellRoot {
     return { acted: acted, clear: clear }
   }
 
-  function summon(pluginId, payloadJson) {
+  function summon(pluginId, payloadJson, centered) {
     var id = shell.pluginRegistry.resolveEnabledId(pluginId)
     if (!id) return false
     var plugins = shell.pluginRegistry.installedPlugins
@@ -1280,7 +1280,7 @@ ShellRoot {
     // Bar widgets take no payload; payloadJson is dropped on this path.
     if (shell.isBarWidgetPanelPlugin(id)) {
       var summoned = shell.bar && typeof shell.bar.summonBarWidget === "function"
-        && shell.bar.summonBarWidget(id)
+        && shell.bar.summonBarWidget(id, centered === true)
       if (!summoned) console.warn("summon: no live bar widget for:", id)
       return summoned === true
     }
@@ -1332,9 +1332,9 @@ ShellRoot {
     return openPanelIds[id] === true
   }
 
-  function toggle(pluginId, payloadJson) {
+  function toggle(pluginId, payloadJson, centered) {
     var id = shell.pluginRegistry.resolveEnabledId(pluginId)
-    return isPluginOpen(id) ? hide(id) : summon(id, payloadJson)
+    return isPluginOpen(id) ? hide(id) : summon(id, payloadJson, centered)
   }
 
   // Map of pluginId -> Loader, populated by the Instantiator delegate below.

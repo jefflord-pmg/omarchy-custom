@@ -184,6 +184,33 @@ runRow({ dispatch: "hl.dsp.window.pseudo()" })
 assert.deepEqual(calls.at(-1), ["dispatch", "hl.dsp.window.pseudo()"])
 console.log("ok: busy operations report refusal; wheel paths summon the browser, answers are copied, Lua binds dispatch")
 
+const panelLaunch = { launched: "", launchedAt: -1, countUse() {}, dismiss() {}, slices: [] }
+const panelCalls = []
+panelLaunch.shell = { toggle: (...args) => panelCalls.push(args) }
+method(read("plugins/xpo.wheel/Wheel.qml"), "run", {
+  root: panelLaunch, Qt: { callLater: fn => fn() }, MenuIndex: M
+})({ plugin: "omarchy.audio" })
+assert.deepEqual(panelCalls, [["omarchy.audio", "{}", true]], "a wheel-launched panel must request centered placement")
+console.log("ok: panels launched by the wheel request centered placement")
+assert.match(read("patches/shell/Ui/KeyboardPanel.qml"),
+  /centeredByWheel: !!bar && bar\.centeredPopoutActive === true/,
+  "panel position binding does not observe the centered bar session")
+assert.match(read("patches/shell/Ui/KeyboardPanel.qml"),
+  /var onScreen = backingWindowVisible && open && centeredByWheel/,
+  "bar-opened KeyboardPanels still request the Wheely backdrop")
+assert.match(read("patches/shell/Ui/KeyboardPanel.qml"),
+  /property bool centeredPlacementHeld: false/,
+  "KeyboardPanel has no per-surface placement latch for its close fade")
+assert.match(read("patches/shell/Ui/KeyboardPanel.qml"),
+  /centeredByWheel \|\| centeredPlacementHeld/,
+  "card position is not held at center as the session owner releases")
+assert.match(read("patches/shell/Ui/KeyboardPanel.qml"),
+  /if \(!root\.open && opacity <= 0\) root\.centeredPlacementHeld = false/,
+  "centered placement latch is not cleared after the card fades out")
+assert.match(read("patches/shell/plugins/bar/Bar.qml"),
+  /api\.centeredPopoutActive = root\.centeredPopoutActive/,
+  "bar facades do not receive centered session state")
+
 // The browser's whole rule: bare keys drive the list, shift drives the preview.
 const scrolls = []
 const browser = {
@@ -457,6 +484,61 @@ opening.shell.closePeers = () => closePluginPeers("xpo.wheel")
 method(wheelSource, "open", openingScope)("{}")
 assert.equal(opening.opened, false, "a peer protecting unsaved work keeps the wheel hidden")
 console.log("ok: the wheel replaces an open panel instead of stacking above it")
+
+// Placement follows the active popout owner: Wheel handoffs retain the hint,
+// while a direct bar summon replaces it with ordinary bar-anchored placement.
+const placementBar = { nextPopoutCentered: false, centeredPopoutOwner: null,
+  centeredPopoutActive: false, activePopout: null }
+placementBar.requestPopout = method(read("patches/shell/plugins/bar/Bar.qml"), "requestPopout",
+  placementBar)
+placementBar.releasePopout = method(read("patches/shell/plugins/bar/Bar.qml"), "releasePopout",
+  placementBar)
+const centeredWidget = { open() { placementBar.requestPopout(this) }, close() {
+  placementBar.releasePopout(this)
+} }
+const directWidget = { open() { placementBar.requestPopout(this) }, close() {
+  placementBar.releasePopout(this)
+} }
+placementBar.findPanelWidget = id => id === "centered" ? centeredWidget : directWidget
+placementBar.preparePopoutPlacement = method(read("patches/shell/plugins/bar/Bar.qml"), "preparePopoutPlacement",
+  placementBar)
+placementBar.popoutPlacementHintTimer = { restart() { this.running = true }, stop() { this.running = false } }
+placementBar.summonBarWidget = method(read("patches/shell/plugins/bar/Bar.qml"), "summonBarWidget",
+  placementBar)
+const delayedCenteredWidget = { opened: false, open() { this.opened = true } }
+placementBar.findPanelWidget = id => id === "centered" ? delayedCenteredWidget : directWidget
+placementBar.summonBarWidget("centered", true)
+assert.equal(placementBar.nextPopoutCentered, true, "queued panel open lost the placement hint")
+delayedCenteredWidget.opened = false
+delayedCenteredWidget.open = function() {
+  this.opened = true
+  placementBar.requestPopout(this)
+}
+delayedCenteredWidget.open()
+assert.equal(placementBar.centeredPopoutOwner, delayedCenteredWidget, "Wheel's placement owner was lost")
+assert.equal(placementBar.centeredPopoutActive, true, "Wheel session was not active")
+placementBar.preparePopoutPlacement(true)
+placementBar.requestPopout(delayedCenteredWidget)
+assert.equal(placementBar.nextPopoutCentered, false, "idempotent open left a stale placement hint")
+assert.equal(placementBar.centeredPopoutActive, true, "idempotent open changed the existing session")
+placementBar.summonBarWidget("direct", false)
+assert.equal(placementBar.centeredPopoutOwner, null, "old owner kept centered placement")
+assert.equal(placementBar.centeredPopoutActive, false, "bar click retained Wheely placement")
+assert.equal(placementBar.nextPopoutCentered, false, "placement hint was not consumed")
+placementBar.releasePopout(directWidget)
+// The old panel may report its close after its replacement opens. Its stale
+// release must not clear the newer Wheel-centered session.
+placementBar.preparePopoutPlacement(true)
+placementBar.requestPopout(centeredWidget)
+placementBar.preparePopoutPlacement(true)
+placementBar.requestPopout(delayedCenteredWidget)
+placementBar.releasePopout(centeredWidget)
+assert.equal(placementBar.centeredPopoutOwner, delayedCenteredWidget, "stale release cleared the replacement panel")
+assert.equal(placementBar.centeredPopoutActive, true, "stale release disabled the replacement backdrop")
+placementBar.releasePopout(delayedCenteredWidget)
+assert.equal(placementBar.centeredPopoutOwner, null, "current owner failed to clear its session")
+assert.equal(placementBar.centeredPopoutActive, false, "current owner failed to clear centered mode")
+console.log("ok: Wheel panels center; direct bar popouts remain anchored")
 
 // `back` can only give back what `run` wrote down.
 // Recorded off `slices`, so a slice picked with the pointer is written down the

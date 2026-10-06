@@ -427,7 +427,7 @@ Item {
     root.dismiss(true)
     // Unmap this layer before the target requests keyboard focus.
     Qt.callLater(function () {
-      if (e.plugin && root.shell) { root.shell.toggle(e.plugin, "{}"); root.launched = e.plugin }
+      if (e.plugin && root.shell) { root.shell.toggle(e.plugin, "{}", true); root.launched = e.plugin }
       // Omarchy 4 requires the Lua dispatcher form for window focus.
       else if (e.address) Hyprland.dispatch("hl.dsp.focus({ window = \"address:" + e.address + "\" })")
       else if (e.dispatch) Hyprland.dispatch(e.dispatch)

@@ -69,6 +69,13 @@ PanelWindow {
   default property alias contentItem: contentHolder.children
 
   readonly property var coordinatorKey: owner || root
+  // Both the trusted bar and its third-party facade expose this session flag.
+  // Some panels register their nested panel, others their host bar widget.
+  readonly property bool centeredByWheel: !!bar && bar.centeredPopoutActive === true
+  // Keep this surface's own placement through its close fade. The bar releases
+  // the session immediately so another panel can open, but the fading card must
+  // not jump back beside its anchor before its opacity reaches zero.
+  property bool centeredPlacementHeld: false
   readonly property var anchorWindow: anchorItem ? anchorItem.QsWindow.window : null
   readonly property string barPos: bar ? bar.position : "top"
 
@@ -81,11 +88,14 @@ PanelWindow {
   property bool surfaceCounted: false
 
   function syncSurfaceCount() {
-    var onScreen = backingWindowVisible && open
+    // Direct bar popups do not use Wheely's shared backdrop.
+    var onScreen = backingWindowVisible && open && centeredByWheel
     if (onScreen === surfaceCounted) return
     surfaceCounted = onScreen
     if (bar && typeof bar.panelSurfaceVisible === "function") bar.panelSurfaceVisible(onScreen)
   }
+
+  onCenteredByWheelChanged: syncSurfaceCount()
 
   function beginFocusPrime() {
     if (open && backingWindowVisible) focusPrimeTimer.restart()
@@ -229,7 +239,7 @@ PanelWindow {
   readonly property real barW: anchorWindow ? anchorWindow.width : screenW
   readonly property real barH: anchorWindow ? anchorWindow.height : 0
   readonly property point cardOrigin: {
-    if (screenW > 0 && screenH > 0) {
+    if ((centeredByWheel || centeredPlacementHeld) && screenW > 0 && screenH > 0) {
       return Qt.point(Math.round(screenW / 2 - contentWidth / 2),
                       Math.round(screenH / 2 - contentHeight / 2))
     }
@@ -280,6 +290,7 @@ PanelWindow {
       popoutSwitchClosing = false
       popoutSwitching = bar.activePopout && bar.activePopout !== coordinatorKey
       bar.requestPopout(coordinatorKey)
+      centeredPlacementHeld = centeredByWheel
       // Wait for the map edge before animating an unmapped surface.
       if (popoutSwitching) popoutSwitchTimer.restart()
       if (backingWindowVisible) startEntryMotion()
@@ -446,6 +457,10 @@ PanelWindow {
     padding: root.padding
     radius: Style.cornerRadius
     opacity: root.open || root.popoutSwitching ? 1.0 : 0
+
+    onOpacityChanged: {
+      if (!root.open && opacity <= 0) root.centeredPlacementHeld = false
+    }
 
     // Transform offsets avoid fighting cardOrigin bindings.
     property real slideX: 0

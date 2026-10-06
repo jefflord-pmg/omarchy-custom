@@ -16,8 +16,10 @@ A radial control center, a file browser and centered shell panels for
   [release notes for wheel history](docs/release-notes-wheel-history.md).
 - **Files**: a keyboard-driven directory browser with previews, opened from
   the wheel. See [`docs/files.md`](docs/files.md).
-- **Centered panels**: bar panels open centered over a blurred desktop. See
-  [`docs/centered-panels.md`](docs/centered-panels.md).
+- **Centered panels**: panels opened from the wheel open centered over a blurred desktop;
+  opening one from its bar icon keeps it beside the bar without the Wheel backdrop. See
+  the [release notes](docs/release-notes-centered-panels.md) or
+  [technical notes](docs/centered-panels.md).
 - **Lock screen**: swappable designs, picked in the wheel under Style ›
   Lockscreen Designs. `rally`: a 3D line-art Audi quattro assembles above the
   password field as comets trace its outlines, gains city reflections and gold
@@ -61,7 +63,7 @@ It links `plugins/` into `~/.config/omarchy/plugins/` and registers them in
 `~/.config/omarchy/shell.json`, appends a marked block (keybinds, layer rules,
 blur, render loop) to `~/.config/hypr/hyprland.lua`, links three helpers into
 `~/.local/bin`, links the lock-screen designs in `lock/` into
-`~/.local/share/wheely/`, patches eight shell files, installs a post-update
+  `~/.local/share/wheely/`, patches nine shell files, installs a post-update
 hook, and restarts the shell. Rerunning is safe. Keep the checkout where it is:
 the hook points to it.
 
@@ -79,7 +81,7 @@ this project is left untouched and reported.
 
 ## Why sudo
 
-The eight patched files live in `/usr/share/omarchy/shell`, owned by the Omarchy
+The nine patched files live in `/usr/share/omarchy/shell`, owned by the Omarchy
 package. Copying them in (install) and restoring them (revert) are the only
 `sudo` calls, and each runs only when a file actually needs changing.
 Everything else stays in your home directory.
