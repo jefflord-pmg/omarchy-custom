@@ -6,6 +6,24 @@ import shutil
 def check(repo, base, run, block):
     shutil.copyfile(repo / "patches/shell/services/PluginShellApi.qml",
                     base / "PluginShellApi.qml")
+    shutil.copyfile(repo / "patches/shell/Ui/PluginBarApi.qml",
+                    base / "PluginBarApi.qml")
+    run("plugin-bar-facade", '''
+  property var surfaces: []
+  PluginBarApi {
+    id: api
+    pluginId: "third.widget"
+    moduleName: "third.widget"
+    _panelSurfaceVisible: function(shown) { root.surfaces = root.surfaces.concat([shown]) }
+  }
+  Timer { interval: 1; running: true; onTriggered: {
+    api.centeredPopoutActive = true
+    api.panelSurfaceVisible(true); api.panelSurfaceVisible(false)
+    if (!api.centeredPopoutActive || JSON.stringify(root.surfaces) !== "[true,false]") {
+      console.error("FAIL bar facade", api.centeredPopoutActive, JSON.stringify(root.surfaces)); Qt.exit(1)
+    } else { console.log("PASS"); Qt.quit() }
+  } }
+''')
     run("plugin-shell-facade", '''
   property int claims: 0
   property int releases: 0
@@ -38,6 +56,11 @@ def check(repo, base, run, block):
                "isBarWidgetPanelPlugin", "menuPluginMayControl", "summonablePanels"]
     production = "\n".join(block(source, "  function " + name + r"\(") for name in methods)
     production += "\n" + block(source, r"  Instantiator {")
+    bar_source = (repo / "patches/shell/plugins/bar/Bar.qml").read_text()
+    bar_api_binding = block(bar_source, r"  function bindPluginBarApi\(")
+    bar_api_binding += "\n" + block(bar_source, r"  function pluginBarApiFor\(")
+    assert "centeredPopoutActive" in bar_api_binding, "bar facade lost centered-session state"
+    assert "_panelSurfaceVisible" in bar_api_binding, "bar facade lost shared-backdrop callback"
     manifests = {name: json.loads((repo / "plugins" / name / "manifest.json").read_text())
                  for name in ["xpo.wheel", "xpo.files"]}
     widget = {"kinds": ["bar-widget"]}

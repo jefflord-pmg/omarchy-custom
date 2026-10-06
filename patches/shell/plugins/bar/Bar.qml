@@ -90,7 +90,13 @@ Item {
   property bool tooltipShown: false
   property int tooltipRequest: 0
   property var activePopout: null
-  // One wash behind every open shell surface.
+  // Wheel launches set a one-shot placement hint before opening a widget.
+  // The KeyboardPanel consumes it through requestPopout and keeps it attached
+  // to the active owner until that panel closes.
+  property bool nextPopoutCentered: false
+  property var centeredPopoutOwner: null
+  property bool centeredPopoutActive: false
+  // Shared Wheely backdrop, held across Wheel/panel handoffs.
   property color panelScrimColor: Color.menu.scrim
   // Keep at least as long as KeyboardPanel.closeFadeDuration.
   property int panelScrimHoldMs: 150
@@ -145,6 +151,7 @@ Item {
     api.foregroundAnimationEnabled = Qt.binding(function() { return root.foregroundAnimationEnabled })
     api.centerSectionRevealHeld = Qt.binding(function() { return root.centerSectionRevealHeld })
     api._centerHoverRevealSuppressed = Qt.binding(function() { return root.centerHoverRevealSuppressed })
+    api.centeredPopoutActive = root.centeredPopoutActive
     root.syncPluginBarApiObjects(api)
   }
 
@@ -276,6 +283,9 @@ Item {
       _run: function(command) { root.run(command) },
       _setCenterHoverRevealSuppressed: function(value) {
         root.centerHoverRevealSuppressed = !!value
+      },
+      _panelSurfaceVisible: function(shown) {
+        root.panelSurfaceVisible(shown)
       }
     })
     if (!api) return null
@@ -324,6 +334,9 @@ Item {
   }
 
   onActivePopoutChanged: syncAllPluginBarApiObjects()
+  onCenteredPopoutActiveChanged: {
+    for (var id in pluginBarApis) pluginBarApis[id].centeredPopoutActive = centeredPopoutActive
+  }
   onClickTargetsChanged: syncAllPluginBarApiObjects()
   onLayoutConfigChanged: syncAllPluginBarApiObjects()
   onModuleSlotsChanged: Qt.callLater(prunePluginBarApis)
@@ -550,16 +563,49 @@ Item {
   }
 
   function requestPopout(owner) {
-    if (activePopout === owner) return
+    if (activePopout === owner) {
+      // An idempotent open must not leave its one-shot hint for the next
+      // panel. Keep the existing session's placement unchanged.
+      nextPopoutCentered = false
+      popoutPlacementHintTimer.stop()
+      return
+    }
+    var centered = nextPopoutCentered
+    nextPopoutCentered = false
+    popoutPlacementHintTimer.stop()
     if (activePopout) {
       if ("closeForPopoutSwitch" in activePopout) activePopout.closeForPopoutSwitch()
       else if ("close" in activePopout) activePopout.close()
     }
     activePopout = owner
+    centeredPopoutOwner = centered ? owner : null
+    centeredPopoutActive = centered
   }
 
   function releasePopout(owner) {
     if (activePopout === owner) activePopout = null
+    // A delayed close from the previous owner must not clear the placement of
+    // a newer popout. KeyboardPanel passes the same coordinator key it used to
+    // acquire the centered session, including when that key is a host widget.
+    if (centeredPopoutOwner === owner) {
+      centeredPopoutOwner = null
+      centeredPopoutActive = false
+    }
+  }
+
+  function preparePopoutPlacement(centered) {
+    nextPopoutCentered = centered === true
+    if (nextPopoutCentered) popoutPlacementHintTimer.restart()
+    else popoutPlacementHintTimer.stop()
+  }
+
+  Timer {
+    id: popoutPlacementHintTimer
+    // A bar widget may update its opened binding before KeyboardPanel's
+    // onOpenChanged runs. Keep the one-shot hint through that queued update,
+    // but don't let it affect a later, unrelated bar click.
+    interval: 500
+    onTriggered: root.nextPopoutCentered = false
   }
 
   readonly property bool vertical: position === "left" || position === "right"
@@ -701,6 +747,7 @@ Item {
     if (!nextSlot || !nextSlot.activeItem || nextSlot.activeItem === owner) return false
 
     lastSwitchDirection = step
+    preparePopoutPlacement(centeredPopoutOwner === owner)
     nextSlot.activeItem.open()
     return true
   }
@@ -755,9 +802,10 @@ Item {
     return chosen ? chosen.activeItem : null
   }
 
-  function summonBarWidget(pluginId) {
+  function summonBarWidget(pluginId, centered) {
     var item = findPanelWidget(pluginId)
     if (!item || typeof item.open !== "function") return false
+    preparePopoutPlacement(centered)
     item.open()
     return true
   }

@@ -1,11 +1,15 @@
 # Centered shell panels
 
 Makes Omarchy's bar panels (Display, Audio, Network, Power…) open centered on
-screen over a blurred desktop, instead of tucked against the bar edge beside
-their widget.
+screen over a blurred desktop when launched from Wheely. Opening a panel from
+its bar widget keeps the normal placement beside that widget, without the
+Wheely backdrop. Placement mode is tracked for the active bar popout session,
+not inferred from which object a panel registers as its owner.
 
-**Working:** centering, blur, Ctrl+Left/Right panel switching, the
-panel-to-panel handoff, and the open/close animation.
+**Working:** Wheel-launched centering and backdrop, normal bar-relative placement
+without the Wheely backdrop, Ctrl+Left/Right panel switching, panel-to-panel
+handoff, and the open/close animation. A Wheel-launched card stays centered
+through its close fade, even after the bar releases the active popout session.
 
 ---
 
@@ -62,13 +66,14 @@ cached package. Anything else stays in place and produces an error. See the
 
 ## 2. What changed
 
-Eight package-owned QML files plus Hyprland config.
+Nine package-owned QML files plus Hyprland config.
 
 | File | Change |
 |---|---|
-| `Ui/KeyboardPanel.qml` | centred placement in `cardOrigin`; `slideX`/`originScale` transform; entry/exit animations; reports surface visibility to the bar |
+| `Ui/KeyboardPanel.qml` | Wheel-launched panels center in `cardOrigin`; direct bar popouts stay anchored beside their widget; Wheel backdrop reporting; holds centered placement through the close fade; `slideX`/`originScale` transform and entry/exit animations |
+| `Ui/PluginBarApi.qml` | exposes the Wheel placement session and shared-backdrop reporting to plugin bar widgets through callbacks |
 | `Ui/PanelKeyCatcher.qml` | Ctrl+Left/Right → `tabRequested`; Backspace asks `xpo.wheel back` |
-| `plugins/bar/Bar.qml` | `PanelScrim` — the shared blurred backdrop; `lastSwitchDirection`; `visiblePanelSurfaces` counter |
+| `plugins/bar/Bar.qml` | `PanelScrim` — shared blurred backdrop counted only by centered Wheely panels; centered placement session retained across panel switches and published to bar facades; owner-checked release prevents a closing old panel from clearing a replacement session |
 | `plugins/clipboard/Clipboard.qml` | Backspace past an empty filter asks `xpo.wheel back` — it rolls its own key handler instead of using `PanelKeyCatcher`; drops its own scrim for the shared one |
 | `plugins/lock/LockView.qml` | hosts the chosen lock-screen design from `lock/` behind a frosted password field; not panel-related, but patched through the same machinery. See [`lockscreen.md`](lockscreen.md) |
 | `plugins/lock/Service.qml` | runs in its own worker process, started by `lock-session/Bridge.qml`; on successful authentication the design plays its exit before a timer releases the lock; tracks `blanked` for the wake flow |
@@ -87,7 +92,11 @@ remap as the wheel hands over to whatever you picked. A scrim inside any of
 them blinks out mid-handoff and takes Hyprland's blur with it. One bar-owned
 surface stays mapped across the whole interaction, and every one of those
 surfaces holds a count on it (`panelSurfaceVisible`) rather than drawing its
-own.
+own. A `KeyboardPanel` contributes to that count only while it is open in a
+Wheely-centered session; an ordinary bar-opened panel does not turn on the
+Wheely backdrop. The closing card keeps its centered coordinates during its
+fade, while its backdrop count is released at logical close and the bar's short
+hold timer covers the remaining fade.
 
 Ordering is by **Wayland layer**, not by `layer_rule`'s `order` field:
 
@@ -96,7 +105,7 @@ Overlay   omarchy-keyboard-panel   the card — opaque, stays sharp
 Overlay   omarchy-wheel            the ring
 Overlay   omarchy-files            the browser card
 Overlay   omarchy-clipboard        the clipboard card
-Top       omarchy-panel-scrim      the blurred wash, held by all of the above
+Top       omarchy-panel-scrim      the blurred wash, counted during the Wheely handoff
 Top       omarchy-bar
 ```
 
@@ -127,6 +136,7 @@ things it needs — silently, because a denied call just returns `false`:
 | `shell.isPluginOpen(other)` / `hide(other)` | `false` — close-others and Backspace-to-wheel dead |
 | `shell.appLibrary` | `null` — app launching dead |
 | shared surface reporting | absent — shared scrim never maps |
+| centered placement and backdrop reporting through `PluginBarApi` | absent — third-party bar widgets cannot follow the Wheel session or hold the shared scrim |
 | peer-panel coordination | absent — surfaces can stack and fight for focus |
 
 `PluginShellApi` now exposes only the missing operations as callbacks closed
@@ -136,6 +146,18 @@ mapped surface and claim their own popout object; the bar validates ownership.
 The host closes peer panels internally, so neither its panel maps nor the live
 Bar object cross the facade. Files uses the public shell IPC for its one call
 back to the wheel.
+
+Bar-widget panels receive the separate `Ui/PluginBarApi.qml` facade. It mirrors
+whether the active popout came from Wheely and routes `panelSurfaceVisible()`
+through a host callback. The same session state is consumed by `KeyboardPanel`
+for its position and backdrop, because third-party widgets do not receive the
+host `Bar` object.
+
+On close, `KeyboardPanel` releases the shared bar session immediately so a
+replacement can open, but holds its own card at the centered coordinates until
+the fade reaches zero. The scrim count is tied to logical open state and the
+Wheel session, not that fade latch, so the backdrop can fade out after the card
+without a one-frame relocation to the anchor.
 
 `pluginShellFor` now returns the scoped facade for every third-party plugin.
 No namespace or plugin id is a trust grant: an unrelated `xpo.*` manifest,
