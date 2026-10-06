@@ -56,8 +56,8 @@ Item {
   readonly property var panels: MenuIndex.panels(root.barIds)
   property var ringIds: null
   readonly property var ring: root.ringIds
-    ? MenuIndex.ringOf(root.menuItems, root.ringIds, root.conditions)
-    : root.panels
+    ? MenuIndex.ringOf(root.menuItems, root.ringIds, root.conditions).concat([MenuIndex.HELP])
+    : root.panels.concat([MenuIndex.HELP])
   readonly property var staticRows: MenuIndex.panelRows(MenuIndex.OVERLAYS.concat(MenuIndex.EXTRAS))
     .concat(MenuIndex.menuRows(root.menuItems, root.conditions))
   readonly property var styleRows: MenuIndex.styles(MenuIndex.lines(root.themeText), root.currentTheme,
@@ -67,24 +67,39 @@ Item {
   property var focusOrder: []
   readonly property var activeWindow: Hyprland.activeToplevel
   readonly property var appLibrary: root.shell ? root.shell.appLibrary : null
+  readonly property var liveWindows: {
+    var values = Hyprland.toplevels.values || [], available = {}, out = []
+    for (var i = 0; i < values.length; i++) available["0x" + values[i].address] = true
+    for (var j = 0; j < root.index.length; j++)
+      if (root.index[j].address && available[root.index[j].address]) out.push(root.index[j])
+    return out
+  }
   property var index: []
   property var uses: ({})
+  property var history: []
+  property string historyOrder: "recent"
+  property bool historyPriority: true
   // A leading sigil selects one search source.
   readonly property string mode: MenuIndex.modeOf(root.query)
   readonly property string term: MenuIndex.termOf(root.query)
   // Cache scanned home paths only for the current open.
   property var files: null
   readonly property int resultLimit: 40
+  readonly property int historyLimit: 40
   readonly property int resultCap: 8
   readonly property var results: root.mode === "file"
     ? MenuIndex.fileRows(root.files, root.term, root.resultLimit, root.home)
     : root.mode === "calc" ? Calc.rows(root.term)
-    : MenuIndex.search(root.index, root.term, root.resultLimit, root.uses)
+    : root.mode === "history" ? MenuIndex.historyRows(root.history, root.term, root.liveWindows, root.historyLimit, root.historyOrder)
+    : root.mode === "help" ? []
+    : MenuIndex.search(root.index, root.term, root.resultLimit, root.uses,
+                       root.historyPriority ? root.history : [], root.historyOrder)
   property int resultIndex: 0
   property int resultTop: 0
   readonly property var beads: root.results.slice(root.resultTop,
                                                   root.resultTop + root.resultCap)
   readonly property bool searching: root.query.length > 0
+  property bool helpVisible: false
 
   // Ignore synthetic hover moves when result rows shift under the pointer.
   property point hoverAt: Qt.point(-1, -1)
@@ -94,6 +109,8 @@ Item {
     return true
   }
   readonly property string emptyText: root.mode === "calc" ? (root.term ? "No answer" : "Type to calculate")
+    : root.mode === "history" ? (root.term ? "No history match" : "No history yet")
+    : root.mode === "help" ? "Press Enter to open search help"
     : root.mode !== "file" ? "No match"
     : !root.files ? "Scanning\u2026"
     : !root.term ? "Type to find files\nctrl+y copy path\nctrl+enter terminal"
@@ -300,6 +317,7 @@ Item {
     root.armed = false
     root.originX = -1
     root.query = ""
+    root.helpVisible = false
     root.path = []
     root.launched = ""
     root.launchedAt = -1
@@ -315,6 +333,7 @@ Item {
 
   // Fade cancellation; unmap immediately before handing keyboard focus to a panel.
   function close(immediate) {
+    root.helpVisible = false
     if (root.shell) root.shell.releasePopout(root)
     if (immediate) { unmap.stop(); root.opened = false; root.shown = false; return }
     if (!root.opened || unmap.running) return
@@ -396,7 +415,13 @@ Item {
 
   function run(e) {
     if (!e) return
+    if (e.help) { root.helpVisible = true; return }
     root.countUse(e)
+    if (e.historyType === "calc") {
+      root.query = "=" + e.calculation
+      searchInput.cursorPosition = root.query.length
+      return
+    }
     if (e.node) { root.enter(e.node); return }
     root.launchedAt = root.slices.indexOf(e)
     root.dismiss(true)
@@ -418,12 +443,47 @@ Item {
 
   // Persist each pick; shell shutdown has no reliable flush point.
   function countUse(e) {
+    root.history = MenuIndex.recordHistory(root.history, e, Date.now(), root.historyLimit)
+    historyFile.setText(JSON.stringify(root.history) + "\n")
     var key = MenuIndex.keyOf(e)
     if (!key) return
     var bump = {}
     bump[key] = (root.uses[key] || 0) + 1
     root.uses = MenuIndex.merge(root.uses, bump)
     usesFile.setText(JSON.stringify(root.uses) + "\n")
+  }
+
+  function removeHistory(e) {
+    if (!e || e.historyType === undefined || !e.historyKey) return false
+    root.history = MenuIndex.removeHistory(root.history, e.historyKey)
+    historyFile.setText(JSON.stringify(root.history) + "\n")
+    root.resultIndex = Math.max(0, Math.min(root.resultIndex, root.results.length - 1))
+    root.showResult()
+    return true
+  }
+
+  function toggleHistoryOrder() {
+    if (root.mode === "history") {
+      var previous = root.historyOrder === "recent" ? "Recent" : "Popular"
+      root.historyOrder = root.historyOrder === "recent" ? "popular" : "recent"
+      var next = root.historyOrder === "recent" ? "Recent" : "Popular"
+      Quickshell.execDetached(["notify-send", "Wheely history order", previous + " → " + next])
+      return true
+    }
+    if (root.searching && root.mode !== "file" && root.mode !== "calc" && root.mode !== "help") {
+      var before = root.historyPriority ? "History priority" : "Normal relevance"
+      root.historyPriority = !root.historyPriority
+      var after = root.historyPriority ? "History priority" : "Normal relevance"
+      Quickshell.execDetached(["notify-send", "Wheely search order", before + " → " + after])
+      return true
+    }
+    return false
+  }
+
+  function showSearchHelp() {
+    root.query = ""
+    root.helpVisible = true
+    searchInput.forceActiveFocus()
   }
 
   function paste() {
@@ -639,6 +699,18 @@ Item {
   }
 
   FileView {
+    id: historyFile
+    path: Quickshell.env("HOME") + "/.local/state/omarchy/wheel-history.json"
+    atomicWrites: true
+    printErrors: false
+    onLoaded: {
+      var parsed = MenuIndex.parse(text())
+      root.history = Array.isArray(parsed) ? parsed.slice(0, root.historyLimit) : []
+    }
+    onLoadFailed: root.history = []
+  }
+
+  FileView {
     printErrors: false
     path: Quickshell.env("HOME") + "/.config/omarchy/wheel.json"
     watchChanges: true
@@ -816,7 +888,7 @@ Item {
           Text {
             anchors.centerIn: parent
             visible: !root.searching
-            text: "Search · / files · = calc"
+            text: "Search · ?? help"
             color: Color.menu.text
             opacity: 0.45
             font.family: Style.font.menuFamily
@@ -852,6 +924,69 @@ Item {
       }
 
       WheelResults { wheel: root }
+
+      Item {
+        anchors.fill: parent
+        visible: root.helpVisible
+        z: 10
+
+        MouseArea {
+          anchors.fill: parent
+          onClicked: root.helpVisible = false
+        }
+
+        BorderSurface {
+          anchors.centerIn: parent
+          width: Math.min(root.searchWidth, Style.space(600))
+          height: helpContent.implicitHeight + Style.space(40)
+          radius: Style.space(16)
+          color: root.surfaceFill
+          borderSpec: Border.flat(root.cometColor, Style.spacing.hairline)
+
+          MouseArea { anchors.fill: parent }
+
+          Column {
+            id: helpContent
+            anchors.fill: parent
+            anchors.margins: Style.space(20)
+            spacing: Style.space(12)
+
+            Text {
+              text: "Search the wheel"
+              color: Color.accent
+              font.family: Style.font.menuFamily
+              font.pixelSize: Style.font.subtitle
+              font.bold: true
+            }
+            Text {
+              width: helpContent.width
+              text: "Type a name to search menu items, apps, open windows, themes and fonts. Menu search matches words; app and window names also match partial words. In regular search, F4 toggles normal relevance/history-prioritized order. In !! history, F4 toggles Recent/Popular order. Use the prefixes below to search a specific source."
+              wrapMode: Text.WordWrap
+              color: Color.menu.text
+              font.family: Style.font.menuFamily
+              font.pixelSize: Style.font.body
+            }
+            Text {
+              width: helpContent.width
+              text: "/path   Find files and folders under your home directory\n= 2+2   Calculate an expression; Enter copies the answer\n!!text   Search activated history by name, expression or answer\n??       Open this search guide"
+              wrapMode: Text.WordWrap
+              color: Color.menu.text
+              font.family: Style.font.menuFamily
+              font.pixelSize: Style.font.body
+              lineHeight: 1.5
+            }
+            Text {
+              width: helpContent.width
+              text: "Use ↑/↓ to move through results and Enter to activate one. Ctrl+Y copies a highlighted file path; Ctrl+Enter opens a terminal in its folder. In regular search, F4 toggles History priority ↔ Normal relevance. In !! history, F4 toggles Recent ↔ Popular order and Del removes the selected item. Notifications show each change. History keeps the 40 most recently used activated results; closed windows are omitted. Esc closes this guide."
+              wrapMode: Text.WordWrap
+              color: Color.menu.text
+              opacity: 0.68
+              font.family: Style.font.menuFamily
+              font.pixelSize: Style.font.caption
+            }
+          }
+        }
+      }
     }
   }
 }

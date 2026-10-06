@@ -44,8 +44,14 @@ key means and the dial performs it, which is what lets a test press a key.
 | `↑` `↓` `←` `→` | `↑`/`↓` jump to the slice at that compass point; `←`/`→` step around the ring |
 | `Enter` | fire the highlighted slice, or open it if it is a submenu |
 | `↑` `↓` `Ctrl+P` `Ctrl+N` | step the result list while searching |
-| `Ctrl+Home` `Ctrl+End` | the first and last of the forty results, from wherever you are |
+| `Ctrl+Home` `Ctrl+End` | the first and last result, from wherever you are |
 | type anything | search menu entries, apps, windows, themes and fonts |
+| normal search | activated matches are promoted to the top, ordered by the current Recent/Popular history mode |
+| `??` | open search help (also on the root ring as **Help**) |
+| `!!` then text | search the 40 most recently used activated results; calculator expressions match both the expression and answer |
+| `Del` while in `!!` history | remove the selected item from history immediately |
+| `F4` during normal search | toggle history-prioritized vs normal relevance order; a notification names the change |
+| `F4` in `!!` history | toggle Recent vs Popular order; a notification names the change |
 | `Backspace` | delete the character before the caret, then go up one level |
 | `Del` | delete the character after the caret |
 | `Ctrl+W` `Ctrl+Backspace` | delete the word before the caret |
@@ -61,13 +67,24 @@ key means and the dial performs it, which is what lets a test press a key.
 | `Esc` | clear the query, then go up one level, then close |
 | `SUPER+W` | close the wheel and whatever it opened |
 
+Activated results are kept in `~/.local/state/omarchy/wheel-history.json`. A result is recorded
+when it runs, not merely when it is highlighted. Repeated activations from either normal search
+or history increase the same use count and refresh the last-used time. `Del` removes the selected
+history entry without confirmation. `!!` searches those records, with the most recently used
+items first by default. Press `F4` in history to toggle between **Recent** (last-used time) and
+**Popular** (use count, with recency breaking ties). In ordinary search, F4 toggles history
+promotion on or off; when on, activated matches rise above other matches and follow the selected
+Recent or Popular order. A notification reports the old and new order for either toggle.
+Calculator records retain their expression and answer, so `!!12` finds both
+`=112*3` (expression) and `=156/13` (answer). Choosing a calculator history row restores its
+expression to the field. Window entries appear in history only while their
+windows are currently alive; closed windows are omitted from results.
+
 The query is a Qt `TextInput`, which types, deletes, moves and selects on its
 own; `MenuKeys.js` sees every key before it does.
 
-Until you type, the field reads `Search · / files · = calc`, and a lone `/`
-names the two keys a path answers to, `Ctrl+Y` and `Ctrl+Enter`.
-`tests/check.js` fails when a sigil joins `MODES` without a word in that
-placeholder.
+Until you type, the field reads `Search · ?? help`. Choose **Help** on the root
+ring or type `??` and press Enter for a guide to search modes.
 
 `Backspace` inside a panel the wheel opened closes it and brings the wheel
 back. A panel cannot tell the wheel from its own bar button, so it does not
@@ -492,7 +509,8 @@ finally **label length**, which floats
 `node tests/wheel-search.js` covers matching and ranking, including issue #1's
 calculator results. `node tests/wheel-binds.js` covers reading the records and
 which bindings join which rows. `node tests/wheel-conditions.js` checks the
-batched script, custom Bash included; `python3 tests/runtime.py` checks live
+batched script, custom Bash included; `node tests/wheel-history.js` covers
+activation history ranking, filtering and retention; `python3 tests/runtime.py` checks live
 refresh, selection and menu-file changes, and like every test that starts
 Quickshell, fails on a warning it doesn't expect (`tests/qslog.py`).
 

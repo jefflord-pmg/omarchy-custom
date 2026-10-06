@@ -8,10 +8,12 @@ A radial control center, a file browser and centered shell panels for
   every panel, the Omarchy menu, every keybinding, apps, open windows
   (`workspace` lists them all), themes and fonts; begin
   with `/` to search files and folders under your home instead (`Ctrl+Enter`
-  opens a terminal in one), or with `=`
-  to calculate (`Enter` copies the answer). `SUPER+W`
+  opens a terminal in one), `=` to calculate (`Enter` copies the answer), or
+  `!!` to search the last 40 activated results; `??` or the root-ring **Help**
+  item opens search guidance. `SUPER+W`
   closes the wheel and any open shell panel, otherwise the active window. See
-  [`docs/wheel.md`](docs/wheel.md).
+  [`docs/wheel.md`](docs/wheel.md), or read the
+  [release notes for wheel history](docs/release-notes-wheel-history.md).
 - **Files**: a keyboard-driven directory browser with previews, opened from
   the wheel. See [`docs/files.md`](docs/files.md).
 - **Centered panels**: bar panels open centered over a blurred desktop. See

@@ -295,10 +295,43 @@ dialKey("Key_Backspace"); dialKey("Key_Escape"); dialKey("Key_Escape")
 assert.deepEqual([levels, copied], [["up", "up", "up"], ["dismissed"]])
 console.log("ok: the field edits the query, the wheel keeps its shortcuts, and a path can be taken away or opened in a terminal")
 
-// The placeholder names every search sigil, so a new mode cannot hide.
+// The compact placeholder advertises help, and Help remains a fixed root item.
 const placeholder = wheelSource.match(/visible: !root\.searching\n\s+text: "([^"]+)"/)[1]
-for (const sigil of Object.keys(M.MODES)) assert.ok(placeholder.includes(sigil + " "), `the placeholder hides ${sigil}`)
-console.log("ok: the search placeholder names every search sigil")
+assert.equal(placeholder, "Search · ?? help")
+assert.equal(M.modeOf("??"), "help")
+assert.equal(M.termOf("??"), "")
+assert.ok(wheelSource.includes("root.panels.concat([MenuIndex.HELP])"))
+console.log("ok: the compact search placeholder points to fixed root Help")
+
+const helpDial = { query: "??", mode: "help", helpVisible: false, searching: true,
+  showSearchHelp() { this.query = ""; this.helpVisible = true }, results: [], resultIndex: 0,
+  run() { throw new Error("help mode must not run an empty result") } }
+const helpKey = keymap("plugins/xpo.wheel/MenuKeys.js", helpDial)
+assert.equal(helpKey("Key_Return").accepted, true)
+assert.deepEqual([helpDial.query, helpDial.helpVisible], ["", true])
+helpKey("Key_Escape")
+assert.equal(helpDial.helpVisible, false, "Escape closes the help panel")
+console.log("ok: ?? opens the search guide and Escape closes it")
+
+const deletedHistory = []
+const historyDial = { mode: "history", searching: true, results: [{ historyKey: "calc:1+1" }], resultIndex: 0,
+  removeHistory: entry => deletedHistory.push(entry.historyKey), toggles: 0,
+  toggleHistoryOrder() { this.toggles++ } }
+const historyKey = keymap("plugins/xpo.wheel/MenuKeys.js", historyDial)
+assert.equal(historyKey("Key_Delete").accepted, true)
+assert.deepEqual(deletedHistory, ["calc:1+1"], "Del immediately removes the selected history result")
+assert.equal(historyKey("Key_F4").accepted, true)
+assert.equal(historyDial.toggles, 1, "F4 toggles the history order")
+historyDial.mode = ""
+historyDial.searching = true
+assert.equal(historyKey("Key_F4").accepted, true)
+assert.equal(historyDial.toggles, 2, "F4 also toggles normal-search history promotion")
+historyDial.mode = "file"
+assert.equal(historyKey("Key_F4").accepted, false, "F4 remains available to normal file-search field input")
+historyDial.mode = ""
+historyDial.searching = false
+assert.equal(historyKey("Key_F4").accepted, false, "F4 without an active search keeps normal ring behavior")
+console.log("ok: Del removes selected history and F4 toggles its order")
 
 // A panel cannot tell how it was opened, so the wheel answers for it: only the
 // panel the wheel put on screen, and only while it is still there.

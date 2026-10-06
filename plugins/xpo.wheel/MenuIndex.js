@@ -34,9 +34,15 @@ var KIND = { slice: 0, window: 1, app: 2, style: 3, menu: 4, bind: 5 }
 
 // Prefer stable ids for use counts; windows already sort by live focus.
 function keyOf(e) {
+  if (e.historyUseKey) return e.historyUseKey
+  if (e.historyKey) return e.historyKey
+  if (e.calculation !== undefined) return "calc:" + e.calculation
   if (e.plugin) return e.plugin
   if (e.id) return e.id
   if (e.appId) return "app:" + e.appId
+  if (e.address) return "window:" + e.address
+  if (e.path) return "file:" + e.path
+  if (e.node) return "node:" + e.node
   return e.action || e.dispatch || ""
 }
 
@@ -47,7 +53,8 @@ function indexOfEntry(rows, previous) {
   for (var i = 0; i < rows.length; i++) {
     var e = rows[i]
     if (keyOf(e) === key && e.action === previous.action
-        && e.address === previous.address && e.path === previous.path) return i
+        && e.address === previous.address && e.path === previous.path
+        && e.calculation === previous.calculation) return i
   }
   return -1
 }
@@ -142,6 +149,9 @@ var EXTRAS = [
 var SEARCH_PANELS = [
   { plugin: "omarchy.weather", icon: "", label: "Weather" }
 ]
+
+var HELP = { icon: "󰋖", label: "Help", help: true,
+            keywords: "search help calculator files history apps windows menu" }
 
 // Clones keep their source's mark; unknown panels get a generic one. Panels
 // that already have a fixed search row are not repeated.
@@ -460,12 +470,37 @@ function squash(text) {
   return String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, "")
 }
 
-function search(index, query, limit, uses) {
+function historyUseKey(item) {
+  if (item.useKey) return item.useKey
+  if (item.plugin) return item.plugin
+  if (item.id) return item.id
+  if (item.appId) return "app:" + item.appId
+  if (item.query !== undefined) return "calc:" + item.query
+  if (item.action) return item.action
+  if (item.dispatch) return item.dispatch
+  if (item.address) return "window:" + item.address
+  if (item.path) return "file:" + item.path
+  if (item.node) return "node:" + item.node
+  return ""
+}
+
+function search(index, query, limit, uses, history, historyOrder) {
   var q = String(query || "").trim().toLowerCase()
   if (!q) return []
   var terms = q.split(/[^a-z0-9]+/)
   var spaced = q.replace(/[^a-z0-9]+/g, " ").trim()
   var squashed = squash(q)
+  var historyRank = {}
+  var orderedHistory = (history || []).slice()
+  orderedHistory.sort(historyOrder === "popular"
+    ? function (a, b) { return (b.uses || 0) - (a.uses || 0) || (b.lastUsed || 0) - (a.lastUsed || 0) }
+    : function (a, b) { return (b.lastUsed || 0) - (a.lastUsed || 0) })
+  if (historyOrder !== "off") {
+    for (var h = 0; h < orderedHistory.length; h++) {
+      var useKey = historyUseKey(orderedHistory[h])
+      if (useKey && historyRank[useKey] === undefined) historyRank[useKey] = h
+    }
+  }
   var hits = []
   for (var i = 0; i < index.length; i++) {
     var e = index[i]
@@ -487,12 +522,16 @@ function search(index, query, limit, uses) {
     var rank = e.kind === KIND.window && !inside ? 0
              : text.squashed.indexOf(squashed) === 0 ? 0
              : startsWord(text.label || (text.label = words(e.label)), spaced) ? 1 : 2
-    hits.push({ rank: rank, exact: text.squashed === squashed ? 0 : 1,
+    var usedAt = historyRank[keyOf(e)]
+    hits.push({ history: usedAt === undefined ? 1 : 0, historyRank: usedAt,
+                rank: rank, exact: text.squashed === squashed ? 0 : 1,
                 uses: -(uses[keyOf(e)] || 0), len: e.label.length, entry: e })
   }
   // An exact label beats a more-used one it prefixes: "lock" locks before it lists designs.
   hits.sort(function (a, b) {
-    return a.rank - b.rank
+    return a.history - b.history
+        || (a.history === 0 ? a.historyRank - b.historyRank : 0)
+        || a.rank - b.rank
         || a.entry.kind - b.entry.kind
         || a.exact - b.exact
         || a.uses - b.uses
@@ -505,15 +544,111 @@ function search(index, query, limit, uses) {
 }
 
 // Leading sigils select a search source.
-var MODES = { "/": "file", "=": "calc" }
+var MODES = { "/": "file", "=": "calc", "??": "help" }
+MODES["!!"] = "history"
 
 function modeOf(query) {
-  return MODES[String(query || "").charAt(0)] || ""
+  var q = String(query || "")
+  if (q.indexOf("!!") === 0) return MODES["!!"]
+  if (q.indexOf("??") === 0) return MODES["??"]
+  return MODES[q.charAt(0)] || ""
 }
 
 function termOf(query) {
   var q = String(query || "")
-  return modeOf(q) ? q.slice(1) : q
+  return modeOf(q) === "history" || modeOf(q) === "help" ? q.slice(2) : modeOf(q) ? q.slice(1) : q
+}
+
+// A history key represents the action, not its current label or search position.
+function historyRecord(entry, now) {
+  if (!entry) return null
+  var type, key, extra = {}
+  if (entry.historyRecord) {
+    var saved = merge({}, entry.historyRecord)
+    saved.useKey = saved.useKey || entry.historyUseKey || keyOf(entry)
+    saved.uses = (saved.uses || 0) + 1
+    saved.lastUsed = now
+    return saved
+  }
+  if (entry.calculation !== undefined) {
+    type = "calc"; key = "calc:" + entry.calculation
+    extra.query = String(entry.calculation)
+    extra.answer = String(entry.label)
+  } else if (entry.plugin) { type = "plugin"; key = "plugin:" + entry.plugin; extra.plugin = entry.plugin }
+  else if (entry.appId) {
+    type = "app"; key = "app:" + entry.appId; extra.appId = entry.appId
+    if (entry.appIcon) extra.appIcon = entry.appIcon
+  }
+  else if (entry.address) { type = "window"; key = "window:" + entry.address; extra.address = entry.address }
+  else if (entry.path) { type = "file"; key = "file:" + entry.path; extra.path = entry.path }
+  else if (entry.node) { type = "node"; key = "node:" + entry.node; extra.node = entry.node }
+  else if (entry.dispatch) { type = "dispatch"; key = "dispatch:" + entry.dispatch; extra.dispatch = entry.dispatch }
+  else if (entry.id) { type = "action"; key = "id:" + entry.id; extra.id = entry.id }
+  else if (entry.action) { type = "action"; key = "action:" + entry.action; extra.action = entry.action }
+  else if (entry.copy !== undefined) { type = "copy"; key = "copy:" + entry.copy; extra.copy = entry.copy }
+  else return null
+  return merge({ key: key, useKey: keyOf(entry), type: type, label: String(entry.label || ""), trail: String(entry.trail || ""),
+                 icon: String(entry.icon || ""), uses: 1, lastUsed: now }, extra)
+}
+
+// Move repeat activations to the front and retain the 40 most recently used distinct actions.
+function recordHistory(history, entry, now, limit) {
+  var record = historyRecord(entry, now)
+  if (!record) return history || []
+  var previous = (history || []).find(function (item) { return item.key === record.key })
+  if (previous && !entry.historyRecord) record.uses = (previous.uses || 0) + 1
+  var out = (history || []).filter(function (item) { return item.key !== record.key })
+  out.push(record)
+  out.sort(function (a, b) { return b.lastUsed - a.lastUsed })
+  return out.slice(0, limit || 100)
+}
+
+function removeHistory(history, key) {
+  return (history || []).filter(function (item) { return item.key !== key })
+}
+
+function historyRows(history, query, liveRows, limit, order) {
+  var q = String(query || "").trim().toLowerCase()
+  var live = liveRows || []
+  var rows = []
+  for (var i = 0; i < (history || []).length; i++) {
+    var item = history[i]
+    if (item.type === "window" && !live.some(function (row) { return row.address === item.address })) continue
+    var searchable = [item.label, item.trail, item.query, item.answer, item.path, item.action, item.dispatch,
+                      item.appId, item.plugin, item.node].join(" ").toLowerCase()
+    var terms = q.split(/\s+/)
+    if (q && !terms.every(function (term) { return searchable.indexOf(term) !== -1 })) continue
+    var row
+    if (item.type === "window") {
+      var current = live.find(function (candidate) { return candidate.address === item.address })
+      row = merge({}, current)
+    } else {
+      row = { icon: item.icon, label: item.type === "calc" ? item.query : item.label,
+              trail: item.type === "calc" ? "= " + item.answer : item.trail }
+      if (item.plugin) row.plugin = item.plugin
+      if (item.appId) { row.appId = item.appId; row.appIcon = item.appIcon }
+      if (item.id) row.id = item.id
+      if (item.path) row.path = item.path
+      if (item.node) row.node = item.node
+      if (item.action) row.action = item.action
+      if (item.dispatch) row.dispatch = item.dispatch
+      if (item.copy !== undefined) row.copy = item.copy
+      if (item.type === "calc") row.calculation = item.query
+    }
+    row.historyRecord = item
+    row.historyType = item.type
+    row.historyKey = item.key
+    row.historyUseKey = item.useKey || item.plugin || item.id
+      || (item.appId ? "app:" + item.appId : item.query !== undefined ? "calc:" + item.query
+        : item.action || item.dispatch || (item.address ? "window:" + item.address
+          : item.path ? "file:" + item.path : item.node ? "node:" + item.node : ""))
+    row.keywords = searchable
+    rows.push({ row: row, uses: item.uses || 0, lastUsed: item.lastUsed || 0 })
+  }
+  rows.sort(order === "popular"
+    ? function (a, b) { return b.uses - a.uses || b.lastUsed - a.lastUsed }
+    : function (a, b) { return b.lastUsed - a.lastUsed })
+  return rows.slice(0, limit || 100).map(function (hit) { return hit.row })
 }
 
 var NO_FILES = { paths: [], lower: [] }

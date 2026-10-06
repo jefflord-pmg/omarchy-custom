@@ -108,6 +108,35 @@ for (const renamed of [false, true]) {
   }
 }
 
+// Activated matches lead regular search, and their order follows the history mode.
+const visited = [
+  { id: "menu.network", kind: M.KIND.menu, label: "Network", keywords: "network", action: "network" },
+  { id: "menu.network.settings", kind: M.KIND.menu, label: "Network Settings", keywords: "network settings", action: "settings" },
+  { id: "menu.network.status", kind: M.KIND.menu, label: "Network Status", keywords: "network status", action: "status" }
+]
+let history = []
+history = M.recordHistory(history, visited[0], 1, 40)
+history = M.recordHistory(history, visited[1], 2, 40)
+history = M.recordHistory(history, visited[0], 3, 40)
+assert.deepEqual(M.search(visited, "network", 40, {}, history, "recent").map(row => row.id),
+  ["menu.network", "menu.network.settings", "menu.network.status"])
+assert.deepEqual(M.search(visited, "network", 40, {}, history, "popular").map(row => row.id),
+  ["menu.network", "menu.network.settings", "menu.network.status"])
+const popularityHistory = history.map(item => Object.assign({}, item))
+popularityHistory.find(item => item.id === "menu.network.settings").uses = 5
+popularityHistory.find(item => item.id === "menu.network.settings").lastUsed = 2
+popularityHistory.find(item => item.id === "menu.network").lastUsed = 3
+assert.deepEqual(M.search(visited, "network", 40, {}, popularityHistory, "recent").map(row => row.id),
+  ["menu.network", "menu.network.settings", "menu.network.status"])
+assert.deepEqual(M.search(visited, "network", 40, {}, popularityHistory, "popular").map(row => row.id),
+  ["menu.network.settings", "menu.network", "menu.network.status"])
+assert.deepEqual(M.search(visited, "network", 40, {}, []).map(row => row.id),
+  ["menu.network", "menu.network.status", "menu.network.settings"],
+  "empty history disables history priority and restores ordinary relevance")
+assert.deepEqual(M.search(visited, "network", 40, {}).map(row => row.id),
+  ["menu.network", "menu.network.status", "menu.network.settings"], "no-history search keeps existing ranking")
+console.log("ok: activated matches lead normal search in recent or popular order")
+
 // Exercise the production refresh path after its live inputs change in place.
 const wheel = fs.readFileSync(path.join(__dirname, "../plugins/xpo.wheel/Wheel.qml"), "utf8")
 const desktop = { id: "org.example.editor", name: "Old Editor" }

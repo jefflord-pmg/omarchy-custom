@@ -45,5 +45,5 @@ function rows(text) {
   var v = evaluate(text)
   if (!isFinite(v)) return []
   var answer = String(Number(v.toPrecision(15)))
-  return [{ icon: "󰃬", label: answer, trail: "", copy: answer }]
+  return [{ icon: "󰃬", label: answer, trail: "", copy: answer, calculation: String(text).trim() }]
 }

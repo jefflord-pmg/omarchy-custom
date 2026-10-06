@@ -15,7 +15,7 @@ for (const [text, want] of [
   // Float noise, bare decimals, signs, and magnitudes JavaScript writes in e-notation.
   ["0.1+0.2", "0.3"], [" .5 + 1. ", "1.5"], ["--2", "2"], ["+3", "3"], ["-0", "0"], ["1/3", "0.333333333333333"],
   ["2^100", "1.26765060022823e+30"], ["1/2^40", "9.09494701772928e-13"]
-]) assert.deepEqual(C.rows(text), [{ icon: "󰃬", label: want, trail: "", copy: want }], text)
+]) assert.deepEqual(C.rows(text), [{ icon: "󰃬", label: want, trail: "", copy: want, calculation: text.trim() }], text)
 
 // Half-typed, foreign, or non-finite input has no answer.
 for (const text of ["", "  ", "2+", "(1+2", "(2 3", "1+2)", "()", "2(3)", "1 2", "1.2.3", "x^0", "2**3", "1,000",

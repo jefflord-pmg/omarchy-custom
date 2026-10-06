@@ -34,7 +34,8 @@ function onKey(wheel, event) {
     }
   }
   if (event.key === Qt.Key_Escape) {
-    if (wheel.searching) wheel.query = ""
+    if (wheel.helpVisible) wheel.helpVisible = false
+    else if (wheel.searching) wheel.query = ""
     else if (!wheel.up()) wheel.dismiss()
     event.accepted = true; return
   }
@@ -42,7 +43,17 @@ function onKey(wheel, event) {
     wheel.up(); event.accepted = true; return
   }
   if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+    if (wheel.mode === "help") { wheel.showSearchHelp(); event.accepted = true; return }
     wheel.run(wheel.searching ? wheel.results[wheel.resultIndex] : wheel.slices[wheel.selected])
+    event.accepted = true; return
+  }
+  if (event.key === Qt.Key_Delete && wheel.mode === "history") {
+    wheel.removeHistory(wheel.results[wheel.resultIndex])
+    event.accepted = true; return
+  }
+  if (event.key === Qt.Key_F4 && wheel.searching
+      && wheel.mode !== "file" && wheel.mode !== "calc" && wheel.mode !== "help") {
+    wheel.toggleHistoryOrder()
     event.accepted = true; return
   }
   if (wheel.searching) {
