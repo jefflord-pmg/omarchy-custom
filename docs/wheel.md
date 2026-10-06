@@ -40,7 +40,7 @@ key means and the dial performs it, which is what lets a test press a key.
 
 | | |
 |---|---|
-| `SUPER+A` | open (tap — do not hold, see below) |
+| `SUPER+A` (or `SUPER+SPACE` with `./install.sh space`) | open (tap — do not hold, see below) |
 | `↑` `↓` `←` `→` | `↑`/`↓` jump to the slice at that compass point; `←`/`→` step around the ring |
 | `Enter` | fire the highlighted slice, or open it if it is a submenu |
 | `↑` `↓` `Ctrl+P` `Ctrl+N` | step the result list while searching |

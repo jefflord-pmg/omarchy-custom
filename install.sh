@@ -2,6 +2,13 @@
 # Install plugins and rebase the shell patches onto upstream changes.
 set -uo pipefail
 
+LAYOUT=default
+if (( $# > 1 )) || [[ ${1-} && ${1-} != space ]]; then
+  printf 'Usage: %s [space]\n' "$0" >&2
+  exit 2
+fi
+[[ ${1-} == space ]] && LAYOUT=space
+
 SHELL_DIR=/usr/share/omarchy/shell
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 FILES=(Ui/KeyboardPanel.qml Ui/PanelKeyCatcher.qml plugins/bar/Bar.qml
@@ -32,7 +39,7 @@ mkdir -p "$data/lock-session" &&
 command -v jq >/dev/null || { alert "jq is required to register plugins"; exit 1; }
 command -v python3 >/dev/null || { alert "python3 is required to manage user configuration"; exit 1; }
 command -v hyprctl >/dev/null || { alert "hyprctl is required to validate user configuration"; exit 1; }
-python3 "$REPO/scripts/user-config.py" install ~/.config/hypr/hyprland.lua "$STATE" ~/.local/bin || exit 1
+python3 "$REPO/scripts/user-config.py" install ~/.config/hypr/hyprland.lua "$STATE" ~/.local/bin "$LAYOUT" || exit 1
 mkdir -p ~/.config/omarchy/plugins ~/.local/bin || exit 1
 if [[ ! -e $CONF ]]; then
   cp "${OMARCHY_PATH:-/usr/share/omarchy}/config/omarchy/shell.json" "$CONF" || exit 1
@@ -57,11 +64,15 @@ done
 
 # The copied hook is a shell-quoted trampoline back to this checkout.
 hook_dir=$(mktemp -d) || exit 1
-printf '#!/bin/bash\nexec %q\n' "$REPO/install.sh" > "$hook_dir/wheely" &&
-  omarchy hook install post-update "$hook_dir/wheely" || {
-    plugins_ok=0
-    alert "Could not install the post-update hook"
-  }
+if [[ $LAYOUT == space ]]; then
+  printf '#!/bin/bash\nexec %q space\n' "$REPO/install.sh" > "$hook_dir/wheely"
+else
+  printf '#!/bin/bash\nexec %q\n' "$REPO/install.sh" > "$hook_dir/wheely"
+fi
+omarchy hook install post-update "$hook_dir/wheely" || {
+  plugins_ok=0
+  alert "Could not install the post-update hook"
+}
 rm -rf "$hook_dir"
 
 # ------------------------------------------------------------------- patches

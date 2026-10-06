@@ -17,9 +17,18 @@ hl.layer_rule({
   animation = "none",
 })
 
+-- install.sh space switches the wheel and Omarchy menu keys; the installer
+-- replaces this value in the managed block and persists the choice in its hook.
+local space_layout = false
+local wheel_key = "SUPER + A"
+local menu_key = "SUPER + SPACE"
+if space_layout then wheel_key, menu_key = menu_key, wheel_key end
+
 hl.unbind("SUPER + A")
-o.bind("SUPER + A", "Wheel", "omarchy-shell -q shell summon xpo.wheel")
-o.bind("SUPER + A", nil, "omarchy-shell -q shell call xpo.wheel commit ''", { release = true })
+if space_layout then hl.unbind("SUPER + SPACE") end
+o.bind(wheel_key, "Wheel", "omarchy-shell -q shell summon xpo.wheel")
+o.bind(wheel_key, nil, "omarchy-shell -q shell call xpo.wheel commit ''", { release = true })
+if space_layout then o.bind(menu_key, "Omarchy menu", "omarchy-menu toggle") end
 
 -- SUPER+W normally closes a window; the helper retains that fallback.
 hl.unbind("SUPER + W")

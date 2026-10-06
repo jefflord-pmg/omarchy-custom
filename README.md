@@ -3,7 +3,8 @@
 A radial control center, a file browser and centered shell panels for
 [Omarchy](https://omarchy.org).
 
-- **Wheel** (`SUPER+A`): your bar's panels on a ring. Start typing to search
+- **Wheel** (`SUPER+A` by default; `SUPER+SPACE` with the optional `space`
+  layout): your bar's panels on a ring. Start typing to search
   every panel, the Omarchy menu, every keybinding, apps, open windows
   (`workspace` lists them all), themes and fonts; begin
   with `/` to search files and folders under your home instead (`Ctrl+Enter`
@@ -47,6 +48,12 @@ git clone https://github.com/Xpond/wheely
 cd wheely
 ./install.sh
 ```
+
+By default, Wheely uses `SUPER+A` and Omarchy's menu remains on `SUPER+SPACE`.
+To swap them, run `./install.sh space`: Wheely uses `SUPER+SPACE` and the
+Omarchy menu uses `SUPER+A`. The selected layout is retained by the post-update
+hook. Running `./install.sh` again without an argument selects the default
+layout.
 
 It links `plugins/` into `~/.config/omarchy/plugins/` and registers them in
 `~/.config/omarchy/shell.json`, appends a marked block (keybinds, layer rules,

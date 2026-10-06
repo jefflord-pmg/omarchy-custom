@@ -47,7 +47,9 @@ def change_config(config, before, after):
         raise
 
 
-def configure(mode, config, state, bindir):
+def configure(mode, config, state, bindir, layout="default"):
+    if layout not in ("default", "space"):
+        raise ValueError("Expected default or space key layout")
     record = state / "user-config.json"
     if mode == "revert" and not record.exists():
         # An installer older than the record may still have linked helpers into this checkout.
@@ -84,7 +86,12 @@ def configure(mode, config, state, bindir):
             saved["links"][name] = list(dict.fromkeys(allowed + [target]))
 
     if mode == "install":
-        new_block = "\n" + BEGIN + (REPO / "config/hyprland.lua").read_text() + END
+        lua = (REPO / "config/hyprland.lua").read_text()
+        marker = "local space_layout = false"
+        if lua.count(marker) != 1:
+            raise ValueError("Could not find the key-layout setting in config/hyprland.lua")
+        lua = lua.replace(marker, f"local space_layout = {'true' if layout == 'space' else 'false'}")
+        new_block = "\n" + BEGIN + lua + END
         if new_block not in saved["blocks"]:
             saved["blocks"].append(new_block)
         # Journal both block/link versions before writes so interrupted updates can retry.
@@ -111,7 +118,8 @@ def configure(mode, config, state, bindir):
             else:
                 write(record, previous_record)
             raise
-        print("Installed wheel keys (SUPER+A, SUPER+W), shared blur, render loop, and helpers")
+        wheel_key = "SUPER+SPACE" if layout == "space" else "SUPER+A"
+        print(f"Installed wheel keys ({wheel_key}, SUPER+W), shared blur, render loop, and helpers")
     else:
         change_config(config, text, text.replace(block, "", 1) if block else text)
         for name in saved["links"]:
@@ -122,9 +130,12 @@ def configure(mode, config, state, bindir):
 
 if __name__ == "__main__":
     try:
-        mode, config, state, bindir = sys.argv[1:]
+        mode, config, state, bindir, *layouts = sys.argv[1:]
+        if len(layouts) > 1:
+            raise ValueError("Expected at most one key layout")
+        layout = layouts[0] if layouts else "default"
         if mode not in ("install", "revert"):
             raise ValueError("Expected install or revert")
-        configure(mode, Path(config), Path(state), Path(bindir))
+        configure(mode, Path(config), Path(state), Path(bindir), layout)
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         sys.exit(f"wheely: {error}")

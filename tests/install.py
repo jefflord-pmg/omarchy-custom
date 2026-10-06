@@ -115,6 +115,9 @@ exit 0''',
         return all(installed(relative) == stock[relative] for relative in files)
 
     asset_dir = user / ".local/share/wheely"
+    result = subprocess.run([str(repo / "install.sh"), "unknown"], cwd=base,
+                            env=env, text=True, capture_output=True, timeout=15)
+    assert result.returncode == 2 and not conf.exists(), result.stderr
     result = run()
     assert result.returncode == 0, result.stderr
     designs = asset_dir / "lock"
@@ -167,6 +170,22 @@ exit 0''',
     assert not asset_dir.exists()
     assert run("revert.sh").returncode == 0
     print("ok: revert removes the hook and plugins, restores QML, and preserves other settings")
+
+    result = subprocess.run(
+        [str(repo / "install.sh"), "space"], cwd=base, env=env,
+        text=True, capture_output=True, timeout=15)
+    assert result.returncode == 0, result.stderr
+    managed = (user / ".config/hypr/hyprland.lua").read_text()
+    assert "local space_layout = true" in managed
+    assert "space\n" in hook.read_text()
+    result = subprocess.run([str(hook)], cwd=base, env=env, text=True,
+                            capture_output=True, timeout=15)
+    assert result.returncode == 0, result.stderr
+    assert "local space_layout = true" in (user / ".config/hypr/hyprland.lua").read_text()
+    assert run("revert.sh").returncode == 0
+    verify(user, repo, installed=False)
+    assert not hook.exists()
+    print("ok: space layout installs and survives the post-update hook, then reverts")
 
     # The state revert broke on: patches an older installer left without records, two of
     # them an older committed version of the patch.

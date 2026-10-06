@@ -62,6 +62,9 @@ def check():
         def run(mode):
             module.configure(mode, config, state, bindir)
 
+        def run_layout(mode, layout):
+            module.configure(mode, config, state, bindir, layout)
+
         for _ in range(2):
             run("install")
             installed = config.read_bytes()
@@ -80,6 +83,21 @@ def check():
             run("revert")
             config.write_bytes(original.encode())
         print("ok: install/revert/reinstall preserves personal edits, bytes, and permissions")
+
+        run_layout("install", "space")
+        assert "local space_layout = true" in config.read_text()
+        run_layout("install", "space")
+        assert config.read_text().count(module.BEGIN) == 1
+        run_layout("install", "default")
+        assert "local space_layout = false" in config.read_text()
+        run("revert")
+        assert config.read_bytes() == original.encode()
+        try:
+            run_layout("install", "unexpected")
+            raise AssertionError("accepted an unknown key layout")
+        except ValueError:
+            pass
+        print("ok: default and space layouts update idempotently and revert cleanly")
 
         # A symlinked main config remains a symlink; helper links into this checkout are ours,
         # including one an older installer left without a record.
