@@ -496,9 +496,10 @@ When rows refresh, selection follows the same action to its new position. If tha
 action disappears or its command changes, selection clears. A refresh cannot turn
 a selected Logout into Reboot. A new search query still selects its first result.
 
-App and window text accepts substrings: `calc` finds `Omacalc (Development)` even
-without calculator keywords. Other rows still require each query term to start a
-word, keeping menu searches narrow. Rows then
+Panel, app and window text accepts substrings: `onedrive` finds `omaonedrive`,
+and `calc` finds `Omacalc (Development)` even without calculator keywords.
+Other rows still require each query term to start a word, keeping menu searches
+narrow. Rows then
 sort on six keys: **rank** (label-prefix, then a label word, then a hit
 anywhere else — breadcrumb, alias, app id), **kind** (slice, window, app,
 theme/font, menu, keybinding), an **exact label** (so "lock" puts Lock before

@@ -25,6 +25,10 @@ for (const query of ["calc", "omacalc"]) {
 assert.equal(M.search(calculatorRows, "calc development", 40, {})[0].appId, "omacalc-dev")
 assert.equal(M.search(calculatorRows.filter(r => !r.address), "omacalc", 40, {}).length, 2)
 
+// Panel names, like app and window text, match terms inside a word.
+const oneDrivePanels = M.panelRows(M.livePanels([{ id: "omaonedrive", name: "OmaOneDrive" }]))
+assert.deepEqual(M.search(oneDrivePanels, "onedrive", 40, {}).map(r => r.label), ["OmaOneDrive"])
+
 // A window that only contains a term mid-word does not outrank a label that starts with it.
 assert.deepEqual(M.search(M.menuRows({ arch: { label: "Arch", action: "a" } }, M.NO_CONDITIONS).concat(
   M.liveRows({ apps: [], windows: [{ title: "~/x/omarchy-custom", address: "1", wayland: { appId: "kitty" } }],
@@ -57,7 +61,7 @@ function reference(rows, query, limit, uses) {
   return rows.map((entry, i) => {
     const label = entry.label.toLowerCase().replace(/[^a-z0-9]+/g, "")
     const words = tokens(entry.keywords), ident = tokens(entry.ident)
-    const partial = entry.kind === M.KIND.app || entry.kind === M.KIND.window
+    const partial = entry.kind === M.KIND.slice || entry.kind === M.KIND.app || entry.kind === M.KIND.window
     if (!terms.every(t => words.some(w => partial ? w.includes(t) : w.startsWith(t)) || ident.includes(t))) return null
     const labelWords = " " + entry.label.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
       + " " + label + " "
@@ -84,11 +88,13 @@ function fixture(renamed = false) {
     name: renamed ? "Renamed " + label : label, genericName: "App " + i, keywords: ["utility"] } }))
   const windows = labels.map((title, i) => ({ title, address: String(i), wayland: { appId: "App-" + i },
     lastIpcObject: { focusHistoryID: i % 3 } }))
-  return M.panelRows(M.PANELS.concat(M.EXTRAS)).concat(M.menuRows(menu, M.NO_CONDITIONS),
+  const panels = M.PANELS.concat(M.EXTRAS,
+    M.livePanels([{ id: "omaonedrive", name: "OmaOneDrive" }]))
+  return M.panelRows(panels).concat(M.menuRows(menu, M.NO_CONDITIONS),
     M.liveRows({ apps, windows, focusOrder: [] }), M.styles(labels, "", labels, ""))
 }
 const queries = ["", "  ", "a", "app", "ap", "0", "wifi", "wi fi", "wi-fi", "lock", "lockscreen",
-  "files", "open f", "system", "sys m", "audio output", "screen", "utility", "renamed", "é", "हिन्दी",
+  "files", "open f", "system", "sys m", "audio output", "screen", "utility", "renamed", "onedrive", "é", "हिन्दी",
   "---", "...", "  LOCK  ", "@#", "zzzz", "visual code", "audio - o", "acrit", "itor"]
 let checked = 0
 for (const renamed of [false, true]) {

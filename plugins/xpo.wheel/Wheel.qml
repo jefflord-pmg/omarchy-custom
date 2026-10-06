@@ -960,7 +960,7 @@ Item {
             }
             Text {
               width: helpContent.width
-              text: "Type a name to search menu items, apps, open windows, themes and fonts. Menu search matches words; app and window names also match partial words. In regular search, F4 toggles normal relevance/history-prioritized order. In !! history, F4 toggles Recent/Popular order. Use the prefixes below to search a specific source."
+              text: "Type a name to search panels, menu items, apps, open windows, themes and fonts. Menu search matches words; panel, app and window names also match partial words. In regular search, F4 toggles normal relevance/history-prioritized order. In !! history, F4 toggles Recent/Popular order. Use the prefixes below to search a specific source."
               wrapMode: Text.WordWrap
               color: Color.menu.text
               font.family: Style.font.menuFamily

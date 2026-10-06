@@ -449,7 +449,7 @@ function withBindings(rows, binds, items) {
   return out
 }
 
-// Menu terms start words; app and window text also accepts substrings.
+// Menu terms start words; panel, app and window text also accepts substrings.
 // Windows rank as direct hits unless a term only matched inside a word; squashed text keeps
 // "wifi" matching "Wi-Fi".
 function words(text) {
@@ -508,7 +508,7 @@ function search(index, query, limit, uses, history, historyOrder) {
     var text = e._search || (e._search = {
       keywords: words(e.keywords), ident: e.ident ? words(e.ident) : ""
     })
-    var partial = e.kind === KIND.app || e.kind === KIND.window
+    var partial = e.kind === KIND.slice || e.kind === KIND.app || e.kind === KIND.window
     var matched = true, inside = false
     for (var t = 0; t < terms.length; t++) {
       if (!terms[t]) continue
