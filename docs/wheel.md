@@ -52,6 +52,7 @@ key means and the dial performs it, which is what lets a test press a key.
 | `Del` while in `!!` history | remove the selected item from history immediately |
 | `F4` during normal search | toggle history-prioritized vs normal relevance order; a notification names the change |
 | `F4` in `!!` history | toggle Recent vs Popular order; a notification names the change |
+| `F12` | temporarily peek at the desktop by hiding the shared backdrop; press again to restore it |
 | `Backspace` | delete the character before the caret, then go up one level |
 | `Del` | delete the character after the caret |
 | `Ctrl+W` `Ctrl+Backspace` | delete the word before the caret |

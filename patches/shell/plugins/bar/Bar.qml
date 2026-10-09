@@ -98,6 +98,7 @@ Item {
   property bool centeredPopoutActive: false
   // Shared Wheely backdrop, held across Wheel/panel handoffs.
   property color panelScrimColor: Color.menu.scrim
+  property bool panelScrimPeek: false
   // Keep at least as long as KeyboardPanel.closeFadeDuration.
   property int panelScrimHoldMs: 150
   // Count mapped surfaces so the scrim does not arrive before their cards.
@@ -105,6 +106,27 @@ Item {
 
   function panelSurfaceVisible(shown) {
     visiblePanelSurfaces = Math.max(0, visiblePanelSurfaces + (shown ? 1 : -1))
+    if (shown) peekReset.stop()
+    else if (visiblePanelSurfaces === 0 && panelScrimPeek) peekReset.restart()
+  }
+
+  function setWheelBackdropPeek(active, deferRestore) {
+    if (active === true) {
+      peekReset.stop()
+      panelScrimPeek = true
+    } else if (deferRestore === true && panelScrimPeek) {
+      peekReset.restart()
+    } else {
+      peekReset.stop()
+      panelScrimPeek = false
+    }
+  }
+
+  Timer {
+    id: peekReset
+    // Let the shared scrim's normal close hold finish before restoring it.
+    interval: root.panelScrimHoldMs + 25
+    onTriggered: if (root.visiblePanelSurfaces === 0) root.panelScrimPeek = false
   }
   property var barDragSource: null
   property var barDragTarget: null
@@ -1328,7 +1350,7 @@ Item {
       onTriggered: scrimWindow.shown = false
     }
 
-    visible: shown
+    visible: shown && !root.panelScrimPeek
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
     mask: Region { width: 0; height: 0 }

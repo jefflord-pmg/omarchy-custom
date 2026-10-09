@@ -255,9 +255,13 @@ console.log("ok: browser bare keys drive the list, shift drives the preview, ctr
 // The query field types, deletes, moves and selects, Home, End and Ctrl+A included; the rest is the wheel's.
 const copied = []
 const wheelSource = read("plugins/xpo.wheel/Wheel.qml")
+const peekCalls = []
 const dial = { query: "", queryAt: 0, results: [], resultIndex: 0,
+  backdropPeek: false, shell: { setBackdropPeek: (...args) => peekCalls.push(args) },
   get searching() { return this.query.length > 0 },
   dismiss: () => copied.push("dismissed"), showResult() {}, moveResult(step) { this.resultIndex += step } }
+dial.toggleBackdropPeek = method(wheelSource, "toggleBackdropPeek", { root: dial })
+dial.restoreBackdropPeek = method(wheelSource, "restoreBackdropPeek", { root: dial })
 const edit = (query, at) => { dial.query = query; dial.queryAt = at }
 // TextInput's remove() does nothing for an empty selection; insert() moves the caret past its text.
 const field = { selectionStart: 0, selectionEnd: 0, get cursorPosition() { return dial.queryAt },
@@ -269,6 +273,17 @@ dial.copy = method(wheelSource, "copy", { Quickshell: { execDetached: c => copie
 dial.takePath = method(wheelSource, "takePath", { root: dial })
 const dialKey = keymap("plugins/xpo.wheel/MenuKeys.js", dial)
 const ctrl = 1 << 26
+assert.equal(dialKey("Key_F12").accepted, true, "F12 toggles backdrop peek")
+assert.equal(dial.backdropPeek, true)
+assert.deepEqual(peekCalls, [[true, false]])
+assert.equal(dialKey("Key_F12").accepted, true)
+assert.equal(dial.backdropPeek, false, "F12 restores the backdrop")
+assert.deepEqual(peekCalls, [[true, false], [false, false]])
+assert.equal(dialKey("Key_CapsLock").accepted, false, "Caps Lock is not a peek shortcut")
+dial.backdropPeek = true
+dial.restoreBackdropPeek(true)
+assert.equal(dial.backdropPeek, false, "closing restores the wheel's local peek state")
+assert.deepEqual(peekCalls.at(-1), [false, true], "closing defers backdrop restoration through the scrim hold")
 // Del on the bare ring did nothing to see, yet its DEL character landed in the query.
 assert.equal(dialKey("Key_Delete", 0, "\x7f").accepted + "|" + dial.query, "false|", "del on the ring adds nothing")
 edit("firefox", 3)
@@ -637,6 +652,35 @@ for (const f of ["plugins/xpo.wheel/Wheel.qml", "plugins/xpo.files/Files.qml"]) 
     f + " does not drive the bar scrim from its open state")
 }
 console.log("ok: neither plugin paints a scrim; both count on the bar's")
+
+const peekBar = read("patches/shell/plugins/bar/Bar.qml")
+const peekState = { panelScrimPeek: false, visiblePanelSurfaces: 1 }
+const peekReset = { stop() { this.stopped = true }, restart() { this.restarted = true } }
+const peekScope = { root: peekState, peekReset }
+Object.defineProperty(peekScope, "panelScrimPeek", {
+  get() { return peekState.panelScrimPeek }, set(value) { peekState.panelScrimPeek = value }
+})
+const setPeek = method(peekBar, "setWheelBackdropPeek", peekScope)
+setPeek(true, false)
+assert.equal(peekState.panelScrimPeek, true)
+setPeek(false, true)
+assert.equal(peekState.panelScrimPeek, true, "deferred restoration holds peek during panel handoff")
+assert.equal(peekReset.restarted, true)
+setPeek(false, false)
+assert.equal(peekState.panelScrimPeek, false, "explicit restore immediately shows the backdrop")
+assert.match(peekBar, /function setWheelBackdropPeek\(active, deferRestore\)[\s\S]*?panelScrimPeek = true[\s\S]*?peekReset\.restart\(\)[\s\S]*?panelScrimPeek = false/,
+  "the bar must expose a live-only peek override")
+assert.match(peekBar, /visible: shown && !root\.panelScrimPeek/,
+  "peek hides the shared scrim without changing its normal configuration")
+assert.match(peekBar, /onTriggered: if \(root\.visiblePanelSurfaces === 0\) root\.panelScrimPeek = false/,
+  "peek resets when the final panel surface closes")
+assert.match(read("patches/shell/shell.qml"), /_backdropPeek: function\(active, deferRestore\)[\s\S]*?key === "xpo\.wheel"[\s\S]*?setWheelBackdropPeek\(active, deferRestore\)/,
+  "only the wheel facade can request backdrop peek")
+assert.match(read("patches/shell/services/PluginShellApi.qml"), /function setBackdropPeek\(active, deferRestore\)[\s\S]*?_backdropPeek\(active === true, deferRestore === true\)/,
+  "the wheel facade must forward the peek state")
+assert.doesNotMatch(read("plugins/xpo.wheel/MenuKeys.js"), /Key_CapsLock/,
+  "peek is F12-only")
+console.log("ok: F12 temporarily hides the shared backdrop and restores it after close")
 
 // Every third-party plugin gets a facade. A namespace must never grant the
 // host ShellRoot: another plugin can choose the same prefix or even the same id.

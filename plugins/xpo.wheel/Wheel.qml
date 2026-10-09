@@ -22,6 +22,7 @@ Item {
 
   property bool opened: false
   property bool shown: false
+  property bool backdropPeek: false
   // Ignore the pointer position synthesized when the surface maps.
   property bool armed: false
   property bool justOpened: false
@@ -312,6 +313,9 @@ Item {
     unmap.stop()
     var peers = root.closePeers()
     if (!peers.clear) return
+    root.backdropPeek = false
+    if (root.shell && typeof root.shell.setBackdropPeek === "function")
+      root.shell.setBackdropPeek(false, false)
     if (root.shell) root.shell.claimPopout(root)
     root.selected = -1
     root.armed = false
@@ -339,6 +343,19 @@ Item {
     if (!root.opened || unmap.running) return
     root.shown = false
     unmap.start()
+  }
+
+  function toggleBackdropPeek() {
+    root.backdropPeek = !root.backdropPeek
+    if (root.shell && typeof root.shell.setBackdropPeek === "function")
+      root.shell.setBackdropPeek(root.backdropPeek, false)
+  }
+
+  function restoreBackdropPeek(deferRestore) {
+    if (!root.backdropPeek) return
+    root.backdropPeek = false
+    if (root.shell && typeof root.shell.setBackdropPeek === "function")
+      root.shell.setBackdropPeek(false, deferRestore === true)
   }
 
   Timer {
@@ -597,6 +614,7 @@ Item {
   onOpenedChanged: {
     if (root.shell) root.shell.panelSurfaceVisible(root.opened)
     if (!root.opened) {
+      if (typeof root.restoreBackdropPeek === "function") root.restoreBackdropPeek(true)
       root.scanEpoch++
       fileScan.running = false
       root.files = null
