@@ -609,15 +609,12 @@ function removeHistory(history, key) {
 
 function historyRows(history, query, liveRows, limit, order) {
   var q = String(query || "").trim().toLowerCase()
+  var terms = q ? q.split(/\s+/) : []
   var live = liveRows || []
   var rows = []
   for (var i = 0; i < (history || []).length; i++) {
     var item = history[i]
     if (item.type === "window" && !live.some(function (row) { return row.address === item.address })) continue
-    var searchable = [item.label, item.trail, item.query, item.answer, item.path, item.action, item.dispatch,
-                      item.appId, item.plugin, item.node].join(" ").toLowerCase()
-    var terms = q.split(/\s+/)
-    if (q && !terms.every(function (term) { return searchable.indexOf(term) !== -1 })) continue
     var row
     if (item.type === "window") {
       var current = live.find(function (candidate) { return candidate.address === item.address })
@@ -635,6 +632,10 @@ function historyRows(history, query, liveRows, limit, order) {
       if (item.copy !== undefined) row.copy = item.copy
       if (item.type === "calc") row.calculation = item.query
     }
+    // Search only the text the result card renders. IDs, paths, action payloads,
+    // and other activation metadata are not visible search terms.
+    var searchable = [row.label, row.trail].join(" ").toLowerCase()
+    if (q && !terms.every(function (term) { return searchable.indexOf(term) !== -1 })) continue
     row.historyRecord = item
     row.historyType = item.type
     row.historyKey = item.key

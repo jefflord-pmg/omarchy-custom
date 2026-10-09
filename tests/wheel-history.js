@@ -50,6 +50,15 @@ assert.ok(!history.some(item => item.key === removedKey), "selected history can 
 const app = { appId: "org.example.editor", label: "Editor", trail: "App" }
 history = M.recordHistory(history, app, 4, 40)
 assert.equal(M.historyRows(history, "editor", [], 40)[0].appId, app.appId)
+assert.equal(M.historyRows(history, "org.example", [], 40).length, 0,
+  "internal app IDs do not match when they are not shown in the result")
+assert.equal(M.historyRows(history, "app", [], 40).length, 1,
+  "visible trail text remains searchable")
+const plugin = { plugin: "totp.app", label: "Authenticator", trail: "Plugin" }
+history = M.recordHistory(history, plugin, 5, 40)
+assert.equal(M.historyRows(history, "totp", [], 40).length, 0,
+  "plugin IDs do not match when they are not shown in the result")
+assert.equal(M.historyRows(history, "authenticator", [], 40)[0].plugin, plugin.plugin)
 const windowRow = { address: "0xabc", label: "Notes", trail: "Window" }
 history = M.recordHistory(history, windowRow, 5, 40)
 assert.equal(M.historyRows(history, "notes", [], 40).length, 0, "closed windows are omitted")
