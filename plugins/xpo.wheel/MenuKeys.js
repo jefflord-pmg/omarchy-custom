@@ -40,8 +40,7 @@ function onKey(wheel, event) {
   }
   if (event.key === Qt.Key_Escape) {
     if (wheel.helpVisible) wheel.helpVisible = false
-    else if (wheel.searching) wheel.query = ""
-    else if (!wheel.up()) wheel.dismiss()
+    else wheel.dismissByEscape()
     event.accepted = true; return
   }
   if (event.key === Qt.Key_Backspace && !wheel.searching) {

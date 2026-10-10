@@ -23,6 +23,8 @@ Item {
   property bool opened: false
   property bool shown: false
   property bool backdropPeek: false
+  // The release that pairs with a SUPER+A press made while the wheel was open.
+  property bool suppressNextCommit: false
   // Ignore the pointer position synthesized when the surface maps.
   property bool armed: false
   property bool justOpened: false
@@ -308,6 +310,14 @@ Item {
   }
 
   function open() {
+    // SUPER+A while already open is Escape, not a fresh summon followed by a
+    // release-commit. Keep the current query/ring state exactly as Escape does.
+    if (root.opened && !unmap.running) {
+      root.suppressNextCommit = true
+      root.dismissByEscape()
+      return
+    }
+    root.suppressNextCommit = false
     // Treat a press during fade-out as a fresh open.
     var wasOpen = root.opened && !unmap.running
     unmap.stop()
@@ -343,6 +353,12 @@ Item {
     if (!root.opened || unmap.running) return
     root.shown = false
     unmap.start()
+  }
+
+  function dismissByEscape() {
+    if (root.helpVisible) root.helpVisible = false
+    else if (root.searching) root.query = ""
+    else if (!root.up()) root.dismiss()
   }
 
   function toggleBackdropPeek() {
@@ -382,6 +398,10 @@ Item {
 
   // Release fires a flick; the first tap holds and the second dismisses.
   function commit() {
+    if (root.suppressNextCommit) {
+      root.suppressNextCommit = false
+      return "dismissed"
+    }
     if (!root.opened) return "closed"
     if (!root.searching && root.armed && root.selected >= 0) {
       var label = root.slices[root.selected].label

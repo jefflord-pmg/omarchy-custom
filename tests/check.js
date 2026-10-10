@@ -262,6 +262,7 @@ const dial = { query: "", queryAt: 0, results: [], resultIndex: 0,
   dismiss: () => copied.push("dismissed"), showResult() {}, moveResult(step) { this.resultIndex += step } }
 dial.toggleBackdropPeek = method(wheelSource, "toggleBackdropPeek", { root: dial })
 dial.restoreBackdropPeek = method(wheelSource, "restoreBackdropPeek", { root: dial })
+dial.dismissByEscape = method(wheelSource, "dismissByEscape", { root: dial })
 const edit = (query, at) => { dial.query = query; dial.queryAt = at }
 // TextInput's remove() does nothing for an empty selection; insert() moves the caret past its text.
 const field = { selectionStart: 0, selectionEnd: 0, get cursorPosition() { return dial.queryAt },
@@ -341,6 +342,30 @@ dial.up = () => levels.push("up") < 3
 dialKey("Key_Escape"); assert.equal(dial.query, "", "esc clears the query first")
 dialKey("Key_Backspace"); dialKey("Key_Escape"); dialKey("Key_Escape")
 assert.deepEqual([levels, copied], [["up", "up", "up"], ["dismissed"]])
+// SUPER+A while open is Escape, and its paired release cannot commit a slice.
+const repeatedOpen = { opened: true, suppressNextCommit: false, escapeCalls: 0,
+  dismissByEscape() { this.escapeCalls++ } }
+method(wheelSource, "open", { root: repeatedOpen, unmap: { running: false } })()
+assert.equal(repeatedOpen.escapeCalls, 1, "summoning an open wheel follows the Escape path")
+assert.equal(repeatedOpen.suppressNextCommit, true, "the paired release is suppressed")
+const releaseState = { suppressNextCommit: true, opened: true, searching: false, armed: true, selected: 0,
+  slices: [{ label: "Audio" }], run() { throw new Error("suppressed release must not run a slice") } }
+assert.equal(method(wheelSource, "commit", { root: releaseState })(), "dismissed")
+assert.equal(releaseState.suppressNextCommit, false, "only the one paired release is consumed")
+const dismissed = { query: "query", up() { return false }, dismissed: 0, dismiss() { this.dismissed++ },
+  helpVisible: true, get searching() { return this.query.length > 0 } }
+dismissed.dismissByEscape = method(wheelSource, "dismissByEscape", { root: dismissed })
+dismissed.dismissByEscape()
+assert.deepEqual([dismissed.dismissed, dismissed.helpVisible, dismissed.query], [0, false, "query"],
+  "Escape or SUPER+A closes the help panel before anything else")
+dismissed.dismissByEscape()
+assert.deepEqual([dismissed.dismissed, dismissed.query], [0, ""], "the next Escape clears the query")
+dismissed.dismissByEscape()
+assert.equal(dismissed.dismissed, 1, "the next Escape dismisses at the ring root")
+const reopen = { opened: false, suppressNextCommit: true, closePeers: () => ({ clear: false }) }
+method(wheelSource, "open", { root: reopen, unmap: { running: false, stop() {} } })()
+assert.equal(reopen.suppressNextCommit, false, "a fresh summon clears any stale suppression")
+console.log("ok: SUPER+A while open is Escape, and its paired release is suppressed")
 console.log("ok: the field edits the query, the wheel keeps its shortcuts, and a path can be taken away or opened in a terminal")
 
 // The compact placeholder advertises help, and Help remains a fixed root item.
